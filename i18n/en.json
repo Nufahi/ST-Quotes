@@ -1,0 +1,42 @@
+{
+    "app.title": "Quotes",
+
+    "color.pink": "Pink",
+    "color.blue": "Blue",
+    "color.green": "Green",
+    "color.yellow": "Yellow",
+
+    "crumb.bot": "All chats",
+
+    "badge.current": "current",
+    "filter.all": "All",
+
+    "stat.chats": "{n} chats",
+    "stat.quotes": "{n} quotes",
+
+    "who.you": "You",
+    "who.bot": "Bot",
+
+    "action.delete": "Delete",
+    "action.goto": "Go to",
+
+    "placeholder.comment": "Add your note...",
+
+    "empty.bots": "No quotes yet",
+    "empty.botsHint": "Select text in any message and pick a color to save your first quote.",
+    "empty.chats": "No quotes for this bot yet",
+    "empty.quotes": "No quotes match this filter",
+
+    "confirm.delBot": "Delete all quotes for this bot?",
+    "confirm.delChat": "Delete all quotes for this chat?",
+    "confirm.delQuote": "Delete this quote?",
+
+    "toast.saved": "Saved to {label}",
+    "toast.noChat": "Open a chat first to save quotes.",
+    "toast.notInView": "That message isn't loaded in the current view.",
+
+    "set.enabled": "Enable Quotes",
+    "set.highlight": "Highlight quoted text in chat",
+    "set.labels": "Color labels (optional meaning per color)",
+    "set.openPanel": "Open Quotes Panel"
+}

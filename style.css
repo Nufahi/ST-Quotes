@@ -1,0 +1,402 @@
+/* ============================================================
+ * Quotes & Bookmarks for SillyTavern
+ * ============================================================ */
+
+.stq-hidden { display: none !important; }
+body.stq-modal-open { overflow: hidden; }
+
+:root {
+    --stq-bg: var(--SmartThemeBlurTintColor, var(--SmartThemeBotMesBlurTintColor, #1a1a1a));
+    --stq-fg: var(--SmartThemeBodyColor, #e6e6e6);
+    --stq-border: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.12));
+    --stq-surface: rgba(255, 255, 255, 0.04);
+    --stq-surface-hi: rgba(255, 255, 255, 0.08);
+    --stq-muted: color-mix(in srgb, var(--stq-fg) 55%, transparent);
+}
+
+/* ============================================================
+ * IN-CHAT HIGHLIGHT MARK (book highlighter)
+ * ============================================================ */
+.stq-mark {
+    background: color-mix(in srgb, var(--stq-c) 32%, transparent);
+    border-radius: 3px;
+    padding: 0 1px;
+    box-shadow: inset 0 -0.5em 0 color-mix(in srgb, var(--stq-c) 20%, transparent);
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    cursor: help;
+    transition: background 0.15s ease;
+}
+.stq-mark:hover {
+    background: color-mix(in srgb, var(--stq-c) 48%, transparent);
+}
+.mes.stq-flash,
+.stq-mark.stq-flash {
+    animation: stq-flash 1.6s ease;
+}
+@keyframes stq-flash {
+    0%, 100% { box-shadow: none; }
+    20% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--stq-c, #ffd23f) 70%, transparent); }
+}
+
+/* ============================================================
+ * SELECTION POPUP (highlighter toolbar)
+ * ============================================================ */
+.stq-sel-popup {
+    position: fixed;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    padding: 7px 9px;
+    background: var(--stq-bg);
+    border: 1px solid var(--stq-border);
+    border-radius: 999px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    animation: stq-pop 0.13s ease;
+}
+@keyframes stq-pop {
+    from { opacity: 0; transform: translateY(4px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+}
+.stq-sel-arrow {
+    position: absolute;
+    bottom: -6px;
+    width: 12px;
+    height: 12px;
+    background: var(--stq-bg);
+    border-right: 1px solid var(--stq-border);
+    border-bottom: 1px solid var(--stq-border);
+    transform: translateX(-50%) rotate(45deg);
+}
+.stq-sel-popup.stq-below .stq-sel-arrow {
+    bottom: auto;
+    top: -6px;
+    transform: translateX(-50%) rotate(225deg);
+}
+.stq-sel-row { display: flex; gap: 8px; }
+
+.stq-sel-color {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    background: var(--stq-c);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.stq-sel-color:hover { transform: scale(1.18); }
+.stq-sel-color.active {
+    box-shadow: 0 0 0 2px var(--stq-bg), 0 0 0 4px var(--stq-c);
+}
+
+/* ============================================================
+ * MODAL SHELL
+ * ============================================================ */
+.stq-modal { position: fixed; inset: 0; z-index: 10050; }
+.stq-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(3px);
+}
+.stq-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(820px, calc(100vw - 24px));
+    height: min(900px, calc(100vh - var(--topBarBlockSize, 0px) - 24px));
+    margin: calc(var(--topBarBlockSize, 0px) + 8px) auto 16px;
+    background: var(--stq-bg);
+    color: var(--stq-fg);
+    border: 1px solid var(--stq-border);
+    border-radius: 14px;
+    box-shadow: 0 16px 56px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+}
+
+/* ---- header ---- */
+.stq-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--stq-border);
+}
+.stq-header-titles { flex: 1; min-width: 0; }
+.stq-header-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.stq-header-crumb {
+    font-size: 0.78rem;
+    color: var(--stq-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stq-icon-btn {
+    flex: 0 0 auto;
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--stq-surface);
+    color: var(--stq-fg);
+    border: 1px solid var(--stq-border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+.stq-icon-btn:hover { background: var(--stq-surface-hi); }
+.stq-icon-btn:active { transform: scale(0.94); }
+
+/* ---- tools / search ---- */
+.stq-tools { padding: 10px 14px 0; }
+.stq-search-wrap {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--stq-surface);
+    border: 1px solid var(--stq-border);
+    border-radius: 10px;
+    padding: 0 10px;
+}
+.stq-search-wrap i { color: var(--stq-muted); }
+.stq-search-wrap input {
+    flex: 1;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 9px 0;
+    color: var(--stq-fg);
+}
+
+/* ---- body ---- */
+.stq-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px 18px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+ * LISTS / CARDS (bots & chats)
+ * ============================================================ */
+.stq-list { display: flex; flex-direction: column; gap: 8px; }
+.stq-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--stq-surface);
+    border: 1px solid var(--stq-border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+}
+.stq-card:hover {
+    background: var(--stq-surface-hi);
+    border-color: color-mix(in srgb, var(--stq-fg) 22%, transparent);
+}
+.stq-card:active { transform: scale(0.995); }
+.stq-card-main { flex: 1; min-width: 0; }
+.stq-card-title {
+    font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stq-card-sub {
+    font-size: 0.8rem;
+    color: var(--stq-muted);
+    margin-top: 3px;
+    display: flex; align-items: center; gap: 6px;
+}
+.stq-card-chevron { color: var(--stq-muted); font-size: 0.8rem; }
+.stq-badge-cur {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #5aa9ff) 25%, transparent);
+    color: var(--SmartThemeQuoteColor, #5aa9ff);
+}
+
+.stq-dots { display: inline-flex; gap: 4px; }
+.stq-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--stq-c);
+    display: inline-block;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.stq-icon-btn.stq-del-bot,
+.stq-icon-btn.stq-del-chat {
+    width: 30px; height: 30px;
+    opacity: 0.55;
+    background: transparent;
+    border-color: transparent;
+}
+.stq-card:hover .stq-del-bot,
+.stq-card:hover .stq-del-chat { opacity: 1; }
+.stq-del-bot:hover, .stq-del-chat:hover {
+    color: var(--crimson, #e0556a) !important;
+    background: color-mix(in srgb, #e0556a 16%, transparent) !important;
+}
+
+/* ============================================================
+ * FILTER CHIPS
+ * ============================================================ */
+.stq-filters {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 12px;
+}
+.stq-filter-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px;
+    font-size: 0.8rem;
+    border-radius: 999px;
+    background: var(--stq-surface);
+    border: 1px solid var(--stq-border);
+    color: var(--stq-fg);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.stq-filter-chip:hover { background: var(--stq-surface-hi); }
+.stq-filter-chip.active {
+    background: color-mix(in srgb, var(--stq-c, var(--SmartThemeQuoteColor, #5aa9ff)) 22%, transparent);
+    border-color: var(--stq-c, var(--SmartThemeQuoteColor, #5aa9ff));
+}
+.stq-chip-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--stq-c);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.stq-chip-n {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* ============================================================
+ * QUOTE CARDS
+ * ============================================================ */
+.stq-quotes-list { display: flex; flex-direction: column; gap: 10px; }
+.stq-quote {
+    position: relative;
+    display: flex;
+    gap: 0;
+    background: var(--stq-surface);
+    border: 1px solid var(--stq-border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.stq-quote-bar {
+    flex: 0 0 5px;
+    background: var(--stq-c);
+}
+.stq-quote-main {
+    flex: 1; min-width: 0;
+    padding: 12px 14px;
+}
+.stq-quote-text {
+    font-style: italic;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-left: 2px solid color-mix(in srgb, var(--stq-c) 50%, transparent);
+    padding-left: 10px;
+    margin-bottom: 8px;
+}
+.stq-quote-text::before { content: '\201C'; opacity: 0.45; margin-right: 1px; }
+.stq-quote-text::after { content: '\201D'; opacity: 0.45; margin-left: 1px; }
+
+.stq-quote-meta {
+    display: flex; gap: 10px;
+    font-size: 0.74rem;
+    color: var(--stq-muted);
+    margin-bottom: 8px;
+}
+.stq-quote-who { font-weight: 600; }
+
+.stq-q-comment {
+    width: 100%;
+    resize: none;
+    min-height: 34px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.stq-quote-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.stq-q-color { display: flex; gap: 6px; }
+.stq-q-color .stq-sel-color { width: 20px; height: 20px; border-width: 2px; }
+
+.stq-quote-btns { display: flex; gap: 6px; }
+.stq-text-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    border-radius: 8px;
+    background: var(--stq-surface-hi);
+    border: 1px solid var(--stq-border);
+    color: var(--stq-fg);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.stq-text-btn:hover { background: color-mix(in srgb, var(--stq-fg) 14%, transparent); }
+.stq-text-btn.stq-danger:hover {
+    color: var(--crimson, #e0556a);
+    background: color-mix(in srgb, #e0556a 16%, transparent);
+}
+
+/* ============================================================
+ * EMPTY STATE
+ * ============================================================ */
+.stq-empty {
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+    padding: 56px 20px;
+    color: var(--stq-muted);
+}
+.stq-empty i { font-size: 2.6rem; opacity: 0.4; margin-bottom: 14px; }
+.stq-empty-title { font-size: 1rem; font-weight: 600; }
+.stq-empty-hint { font-size: 0.84rem; margin-top: 6px; max-width: 320px; }
+
+/* ============================================================
+ * SETTINGS CARD
+ * ============================================================ */
+.stq-settings .stq-set-caption {
+    font-size: 0.82rem;
+    color: var(--stq-muted);
+    margin: 8px 0 6px;
+}
+.stq-settings .stq-set-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+}
+.stq-settings .stq-label-input { flex: 1; }
+.stq-settings .stq-set-actions { margin-top: 12px; }
+
+/* ============================================================
+ * MOBILE
+ * ============================================================ */
+@media (max-width: 600px) {
+    .stq-panel {
+        width: 100vw;
+        height: calc(100vh - var(--topBarBlockSize, 0px));
+        margin: var(--topBarBlockSize, 0px) auto 0;
+        border-radius: 0;
+        border-left: none; border-right: none; border-bottom: none;
+    }
+    .stq-quote-actions { align-items: stretch; }
+    .stq-sel-color { width: 30px; height: 30px; }
+}
