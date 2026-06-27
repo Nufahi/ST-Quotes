@@ -374,9 +374,47 @@ jQuery(async function () {
     }
 
     function repositionSelPopup() {
-        if (!$selPopup || !lastSelRect) return;
-        const rect = lastSelRect;
+        if (!$selPopup) return;
         const $p = $selPopup;
+        const el = $p[0];
+
+        // On phones / narrow screens the native text-selection menu (Copy /
+        // Select all) is a system overlay that sits over the page and steals
+        // taps, so floating our popup over the selection is unusable. Instead
+        // pin it to an edge of the screen, clear of the native menu. We set the
+        // position with inline !important styles (not a CSS class) because the
+        // extension's style.css gets cached on mobile and a stale copy would
+        // mis-place it.
+        let narrow = false;
+        try { narrow = window.innerWidth <= 900 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (_) { /* noop */ }
+        if (narrow) {
+            const noteOpen = $p.hasClass('stq-note-open');
+            const set = (k, v) => el.style.setProperty(k, v, 'important');
+            set('position', 'fixed');
+            set('left', '50%');
+            set('right', 'auto');
+            set('transform', 'translateX(-50%)');
+            set('z-index', '12000');
+            set('max-width', 'calc(100vw - 16px)');
+            set('opacity', '1');
+            set('animation', 'none');
+            // note editor open -> dock to top so the keyboard doesn't cover it
+            if (noteOpen) { set('top', '10px'); set('bottom', 'auto'); }
+            else { set('bottom', '14px'); set('top', 'auto'); }
+            $p.removeClass('stq-below');
+            const arrow = el.querySelector('.stq-sel-arrow');
+            if (arrow) arrow.style.setProperty('display', 'none', 'important');
+            return;
+        }
+
+        // Desktop: clear any inline docking and float near the selection.
+        ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index', 'max-width', 'opacity', 'animation']
+            .forEach(p => el.style.removeProperty(p));
+        const arrow0 = el.querySelector('.stq-sel-arrow');
+        if (arrow0) arrow0.style.removeProperty('display');
+
+        if (!lastSelRect) return;
+        const rect = lastSelRect;
 
         const pw = $p.outerWidth() || 200;
         const ph = $p.outerHeight() || 48;
