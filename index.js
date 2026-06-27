@@ -444,25 +444,25 @@ jQuery(async function () {
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
         lastSelRect = range.getBoundingClientRect();
 
-        try {
-            const $pop = buildSelPopup();
-            selLog('built=' + (!!$pop && !!$pop[0]) + ' inDOM=' + (!!$pop && !!$pop[0] && document.body.contains($pop[0])));
-            $pop.removeClass('stq-hidden');
-            refreshSelPopupTitles();
-            repositionSelPopup();
-            // synchronous rect read so it cannot be lost to a later teardown
-            const el = $pop && $pop[0];
-            if (el) {
-                const r = el.getBoundingClientRect();
-                const cs = getComputedStyle(el);
-                selLog('rect ' + Math.round(r.left) + ',' + Math.round(r.top)
-                    + ' ' + Math.round(r.width) + 'x' + Math.round(r.height)
-                    + ' d=' + cs.display + ' v=' + cs.visibility
-                    + ' o=' + cs.opacity + ' z=' + cs.zIndex + ' p=' + cs.position
-                    + ' vw=' + window.innerWidth + 'x' + window.innerHeight);
-            }
-        } catch (e) {
-            selLog('SHOW ERR ' + (e && e.message));
+        buildSelPopup().removeClass('stq-hidden');
+        refreshSelPopupTitles();
+        repositionSelPopup();
+
+        if (SEL_DEBUG) {
+            setTimeout(() => {
+                try {
+                    const el = $selPopup && $selPopup[0];
+                    if (!el) { selLog('popup el missing'); return; }
+                    const r = el.getBoundingClientRect();
+                    const cs = getComputedStyle(el);
+                    selLog('rect ' + Math.round(r.left) + ',' + Math.round(r.top)
+                        + ' ' + Math.round(r.width) + 'x' + Math.round(r.height)
+                        + ' disp=' + cs.display + ' vis=' + cs.visibility
+                        + ' op=' + cs.opacity + ' z=' + cs.zIndex
+                        + ' pos=' + cs.position
+                        + ' vw=' + window.innerWidth + 'x' + window.innerHeight);
+                } catch (e) { selLog('rect err ' + e.message); }
+            }, 60);
         }
     }
 
