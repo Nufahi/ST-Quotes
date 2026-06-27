@@ -377,25 +377,6 @@ jQuery(async function () {
 
     let lastSelRect = null; // remembered selection rect for repositioning
 
-    // TEMP DEBUG: shows on-screen toasts so we can diagnose the mobile popup
-    // without a desktop devtools connection. Set back to false once fixed.
-    const SEL_DEBUG = true;
-    let _lastSelLog = '';
-    let _lastSelLogAt = 0;
-    function selLog() {
-        if (!SEL_DEBUG) return;
-        const msg = Array.prototype.join.call(arguments, ' ');
-        const now = Date.now();
-        // de-spam: skip identical messages fired within 1.2s of each other
-        if (msg === _lastSelLog && (now - _lastSelLogAt) < 1200) return;
-        _lastSelLog = msg; _lastSelLogAt = now;
-        try { console.log(LOG_PREFIX, '[sel]', msg); } catch (_) { /* noop */ }
-        try {
-            const toastr = ctx().toastr || window.toastr;
-            if (toastr && toastr.info) toastr.info(msg, 'Quotes/sel', { timeOut: 2500, preventDuplicates: true });
-        } catch (_) { /* noop */ }
-    }
-
     // Resolve the .mes_text element a node lives in. Handles text nodes and the
     // case where the selection boundary is the .mes / .mes_text element itself.
     function closestMesText(node) {
@@ -408,9 +389,8 @@ jQuery(async function () {
     }
 
     function showSelPopupForSelection() {
-        selLog('run; IS_TOUCH=' + IS_TOUCH);
         const s = getSettings();
-        if (!s.enabled) { selLog('ext disabled in settings'); return; }
+        if (!s.enabled) return;
         // Don't disturb the popup while the user is typing a note.
         if (noteFieldActive()) return;
         const sel = window.getSelection();
@@ -418,13 +398,11 @@ jQuery(async function () {
             // On touch a collapsed selection often just means the native menu /
             // a swatch tap cleared it — keep the docked bar if it's already armed.
             if (IS_TOUCH && pendingSelection) return;
-            selLog('collapsed/empty selection');
             hideSelPopup();
             return;
         }
 
         const text = sel.toString().trim();
-        selLog('text len=' + text.length);
         if (text.length < 2) { hideSelPopup(); return; }
 
         const range = sel.getRangeAt(0);
@@ -435,50 +413,68 @@ jQuery(async function () {
         const inText = closestMesText(anchor)
             || closestMesText(range.endContainer)
             || closestMesText(range.commonAncestorContainer);
-        if (!inText) { selLog('not in mes_text'); hideSelPopup(); return; }
+        if (!inText) { hideSelPopup(); return; }
 
         const info = mesInfoFromNode(inText);
-        if (!info) { selLog('no mes info'); hideSelPopup(); return; }
+        if (!info) { hideSelPopup(); return; }
 
-        selLog('SHOWING popup, mesId=' + info.mesId);
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
         lastSelRect = range.getBoundingClientRect();
 
-        try {
-            const $pop = buildSelPopup();
-            selLog('built=' + (!!$pop && !!$pop[0]) + ' inDOM=' + (!!$pop && !!$pop[0] && document.body.contains($pop[0])));
-            $pop.removeClass('stq-hidden');
-            refreshSelPopupTitles();
-            repositionSelPopup();
-            // synchronous rect read so it cannot be lost to a later teardown
-            const el = $pop && $pop[0];
-            if (el) {
-                const r = el.getBoundingClientRect();
-                const cs = getComputedStyle(el);
-                selLog('rect ' + Math.round(r.left) + ',' + Math.round(r.top)
-                    + ' ' + Math.round(r.width) + 'x' + Math.round(r.height)
-                    + ' d=' + cs.display + ' v=' + cs.visibility
-                    + ' o=' + cs.opacity + ' z=' + cs.zIndex + ' p=' + cs.position
-                    + ' vw=' + window.innerWidth + 'x' + window.innerHeight);
-            }
-        } catch (e) {
-            selLog('SHOW ERR ' + (e && e.message));
-        }
+        buildSelPopup().removeClass('stq-hidden');
+        refreshSelPopupTitles();
+        repositionSelPopup();
+    }
+
+    // Whether to dock the toolbar to the screen edge instead of floating over
+    // the selection. Evaluated live so an external CSS cache can't break it.
+    function shouldDock() {
+        if (IS_TOUCH) return true;
+        try { return window.innerWidth <= 900; } catch (_) { return false; }
     }
 
     function repositionSelPopup() {
         if (!$selPopup) return;
         const $p = $selPopup;
+        const el = $p[0];
 
-        // Mobile / touch: dock to the bottom of the viewport so we never sit
-        // under (and fight with) the native selection menu. No anchoring math
-        // needed — CSS handles the layout via the .stq-sel-docked class.
-        if (IS_TOUCH) {
-            $p.removeClass('stq-below');
-            $p.css({ left: '', top: '' });
+        // Mobile / narrow screens: dock to an edge of the viewport so we never
+        // sit under (and fight with) the native text-selection menu. We apply
+        // the layout with INLINE styles (not just a CSS class) because the
+        // extension's CSS file is aggressively cached on mobile and a stale
+        // copy would leave the popup mis-positioned off-screen.
+        if (shouldDock()) {
+            $p.addClass('stq-sel-docked').removeClass('stq-below');
+            const noteOpen = $p.hasClass('stq-note-open');
+            // When the note editor is open, dock to the TOP so the on-screen
+            // keyboard doesn't cover it; otherwise dock to the BOTTOM.
+            el.style.setProperty('position', 'fixed', 'important');
+            el.style.setProperty('left', '50%', 'important');
+            el.style.setProperty('right', 'auto', 'important');
+            el.style.setProperty('transform', 'translateX(-50%)', 'important');
+            el.style.setProperty('z-index', '12000', 'important');
+            el.style.setProperty('width', 'min(440px, calc(100vw - 20px))', 'important');
+            el.style.setProperty('opacity', '1', 'important');
+            el.style.setProperty('animation', 'none', 'important');
+            if (noteOpen) {
+                el.style.setProperty('bottom', 'auto', 'important');
+                el.style.setProperty('top', '12px', 'important');
+            } else {
+                el.style.setProperty('top', 'auto', 'important');
+                el.style.setProperty('bottom', '14px', 'important');
+            }
+            // Inline-force the bits the cached CSS might not provide.
+            const arrow = el.querySelector('.stq-sel-arrow');
+            if (arrow) arrow.style.setProperty('display', 'none', 'important');
+            const close = el.querySelector('.stq-sel-close');
+            if (close) close.style.setProperty('display', 'inline-flex', 'important');
             return;
         }
 
+        // Desktop: float the pill just above (or below) the selection.
+        $p.removeClass('stq-sel-docked');
+        ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index', 'width', 'opacity', 'animation']
+            .forEach(prop => el.style.removeProperty(prop));
         if (!lastSelRect) return;
         const rect = lastSelRect;
 
@@ -1253,9 +1249,8 @@ jQuery(async function () {
     // including while dragging the native selection handles on mobile) plus
     // mouseup/touchend as a fast path on desktop. A debounce lets the
     // selection settle before we read it.
-    const triggerSelPopup = (e) => {
+    const triggerSelPopup = () => {
         if (noteFieldActive()) return; // don't disturb the note being typed
-        if (SEL_DEBUG) { try { console.log(LOG_PREFIX, '[sel] event', e && e.type); } catch (_) { /* noop */ } }
         clearTimeout(triggerSelPopup._t);
         triggerSelPopup._t = setTimeout(showSelPopupForSelection, 200);
     };
@@ -1342,12 +1337,6 @@ jQuery(async function () {
     setTimeout(highlightAllVisible, 600);
 
     console.log(`${LOG_PREFIX} initialized.`);
-    if (SEL_DEBUG) {
-        try {
-            const toastr = ctx().toastr || window.toastr;
-            if (toastr && toastr.success) toastr.success('loaded; IS_TOUCH=' + IS_TOUCH, 'Quotes/debug', { timeOut: 4000 });
-        } catch (_) { /* noop */ }
-    }
 
     // =====================================================================
     // DISPOSE (hot-reload)
