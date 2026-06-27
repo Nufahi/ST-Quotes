@@ -372,20 +372,6 @@ jQuery(async function () {
 
     let lastSelRect = null; // remembered selection rect for repositioning
 
-    const SEL_DEBUG = false; // set true to trace selection handling in console
-    function selLog() { if (SEL_DEBUG) console.log(LOG_PREFIX, '[sel]', ...arguments); }
-
-    // Resolve the .mes_text element a node lives in. Handles text nodes and the
-    // case where the selection boundary is the .mes / .mes_text element itself.
-    function closestMesText(node) {
-        let el = node && node.nodeType === 3 ? node.parentElement : node;
-        if (!el || !el.closest) return null;
-        const direct = el.closest('.mes_text');
-        if (direct) return direct;
-        const mes = el.closest('.mes');
-        return mes ? mes.querySelector('.mes_text') : null;
-    }
-
     function showSelPopupForSelection() {
         const s = getSettings();
         if (!s.enabled) return;
@@ -404,17 +390,13 @@ jQuery(async function () {
         if (text.length < 2) { hideSelPopup(); return; }
 
         const range = sel.getRangeAt(0);
-        // Only react to selections inside a chat message's text body. On mobile
-        // the selection boundary may be the element node itself (not a text
-        // node), and start/end can differ, so check several anchors.
+        // Only react to selections inside a chat message's text body.
         const anchor = range.startContainer;
-        const inText = closestMesText(anchor)
-            || closestMesText(range.endContainer)
-            || closestMesText(range.commonAncestorContainer);
-        if (!inText) { selLog('not in mes_text'); hideSelPopup(); return; }
+        const inText = (anchor.nodeType === 3 ? anchor.parentElement : anchor)?.closest?.('.mes_text');
+        if (!inText) { hideSelPopup(); return; }
 
-        const info = mesInfoFromNode(inText);
-        if (!info) { selLog('no mes info'); hideSelPopup(); return; }
+        const info = mesInfoFromNode(anchor);
+        if (!info) { hideSelPopup(); return; }
 
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
         lastSelRect = range.getBoundingClientRect();
@@ -1206,21 +1188,31 @@ jQuery(async function () {
         boundHandlers.push([evt, fn]);
     }
 
-    // Selection events (mouse + touch + keyboard).
-    // We drive everything off `selectionchange` (fires on every device,
-    // including while dragging the native selection handles on mobile) plus
-    // mouseup/touchend as a fast path on desktop. A debounce lets the
-    // selection settle before we read it.
-    const triggerSelPopup = () => {
+    // Selection events (mouse + touch + keyboard)
+    const onSelectionChange = () => {
         if (noteFieldActive()) return; // don't disturb the note being typed
-        clearTimeout(triggerSelPopup._t);
-        triggerSelPopup._t = setTimeout(showSelPopupForSelection, 200);
+        // debounce a touch so the popup follows the final selection
+        clearTimeout(onSelectionChange._t);
+        onSelectionChange._t = setTimeout(showSelPopupForSelection, 120);
     };
-    const onSelectionChange = triggerSelPopup; // kept name for dispose()
-    document.addEventListener('mouseup', triggerSelPopup);
-    document.addEventListener('touchend', triggerSelPopup);
-    const onSelectionChangeEvt = triggerSelPopup;
-    document.addEventListener('selectionchange', triggerSelPopup);
+    document.addEventListener('mouseup', onSelectionChange);
+    document.addEventListener('touchend', onSelectionChange);
+    const onSelectionChangeEvt = () => {
+        if (noteFieldActive()) return; // clicking into the note collapses the
+        // chat selection — that's expected, keep the popup open.
+        // On touch, selection is driven by dragging the native handles, which
+        // emits a stream of selectionchange events but no clean touchend on the
+        // text. So we both *show* (debounced, once it settles) and avoid hiding
+        // a bar we've already populated from pendingSelection.
+        if (IS_TOUCH) {
+            clearTimeout(onSelectionChange._t);
+            onSelectionChange._t = setTimeout(showSelPopupForSelection, 180);
+            return;
+        }
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) hideSelPopup();
+    };
+    document.addEventListener('selectionchange', onSelectionChangeEvt);
     const onDocPointerDown = (e) => {
         // Close the mark popover when clicking outside it (but not when clicking
         // another mark — onMarkClick handles that).
