@@ -372,8 +372,18 @@ jQuery(async function () {
 
     let lastSelRect = null; // remembered selection rect for repositioning
 
-    const SEL_DEBUG = false; // set true to trace selection handling in console
-    function selLog() { if (SEL_DEBUG) console.log(LOG_PREFIX, '[sel]', ...arguments); }
+    // TEMP DEBUG: shows on-screen toasts so we can diagnose the mobile popup
+    // without a desktop devtools connection. Set back to false once fixed.
+    const SEL_DEBUG = true;
+    function selLog() {
+        if (!SEL_DEBUG) return;
+        const msg = Array.prototype.join.call(arguments, ' ');
+        try { console.log(LOG_PREFIX, '[sel]', msg); } catch (_) { /* noop */ }
+        try {
+            const toastr = ctx().toastr || window.toastr;
+            if (toastr && toastr.info) toastr.info(msg, 'Quotes/sel', { timeOut: 1500, preventDuplicates: false });
+        } catch (_) { /* noop */ }
+    }
 
     // Resolve the .mes_text element a node lives in. Handles text nodes and the
     // case where the selection boundary is the .mes / .mes_text element itself.
@@ -387,8 +397,9 @@ jQuery(async function () {
     }
 
     function showSelPopupForSelection() {
+        selLog('run; IS_TOUCH=' + IS_TOUCH);
         const s = getSettings();
-        if (!s.enabled) return;
+        if (!s.enabled) { selLog('ext disabled in settings'); return; }
         // Don't disturb the popup while the user is typing a note.
         if (noteFieldActive()) return;
         const sel = window.getSelection();
@@ -396,11 +407,13 @@ jQuery(async function () {
             // On touch a collapsed selection often just means the native menu /
             // a swatch tap cleared it — keep the docked bar if it's already armed.
             if (IS_TOUCH && pendingSelection) return;
+            selLog('collapsed/empty selection');
             hideSelPopup();
             return;
         }
 
         const text = sel.toString().trim();
+        selLog('text len=' + text.length);
         if (text.length < 2) { hideSelPopup(); return; }
 
         const range = sel.getRangeAt(0);
@@ -416,6 +429,7 @@ jQuery(async function () {
         const info = mesInfoFromNode(inText);
         if (!info) { selLog('no mes info'); hideSelPopup(); return; }
 
+        selLog('SHOWING popup, mesId=' + info.mesId);
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
         lastSelRect = range.getBoundingClientRect();
 
@@ -1211,8 +1225,9 @@ jQuery(async function () {
     // including while dragging the native selection handles on mobile) plus
     // mouseup/touchend as a fast path on desktop. A debounce lets the
     // selection settle before we read it.
-    const triggerSelPopup = () => {
+    const triggerSelPopup = (e) => {
         if (noteFieldActive()) return; // don't disturb the note being typed
+        if (SEL_DEBUG) { try { console.log(LOG_PREFIX, '[sel] event', e && e.type); } catch (_) { /* noop */ } }
         clearTimeout(triggerSelPopup._t);
         triggerSelPopup._t = setTimeout(showSelPopupForSelection, 200);
     };
@@ -1299,6 +1314,12 @@ jQuery(async function () {
     setTimeout(highlightAllVisible, 600);
 
     console.log(`${LOG_PREFIX} initialized.`);
+    if (SEL_DEBUG) {
+        try {
+            const toastr = ctx().toastr || window.toastr;
+            if (toastr && toastr.success) toastr.success('loaded; IS_TOUCH=' + IS_TOUCH, 'Quotes/debug', { timeOut: 4000 });
+        } catch (_) { /* noop */ }
+    }
 
     // =====================================================================
     // DISPOSE (hot-reload)
