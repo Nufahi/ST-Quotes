@@ -26,12 +26,25 @@ jQuery(async function () {
     // ---------------------------------------------------------------------
     let I18N = {};
     function detectLocale() {
+        // 1) Respect the language the user picked in SillyTavern's UI
+        //    (User Settings -> Language). ST stores it in localStorage under
+        //    "language"; empty/"default" means "follow the browser".
+        try {
+            const stored = localStorage.getItem('language');
+            if (stored && stored.toLowerCase() !== 'default') {
+                return stored.toLowerCase().slice(0, 2);
+            }
+        } catch (_) { /* noop */ }
+
+        // 2) Fall back to anything the context exposes.
         try {
             const c = ctx();
             const fromCtx = (typeof c.getLocale === 'function' && c.getLocale())
                 || c.locale || c.language;
             if (fromCtx) return String(fromCtx).toLowerCase().slice(0, 2);
         } catch (_) { /* noop */ }
+
+        // 3) Last resort: the browser language.
         return (navigator.language || 'en').toLowerCase().slice(0, 2);
     }
     async function loadI18n() {
