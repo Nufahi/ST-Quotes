@@ -20,6 +20,9 @@
     "action.delete": "Delete",
     "action.goto": "Go to",
     "action.save": "Save",
+    "action.copy": "Copy",
+    "toast.copied": "Quote copied",
+    "toast.copyFailed": "Couldn't copy",
 
     "sel.addNote": "Add a note",
 

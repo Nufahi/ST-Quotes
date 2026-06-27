@@ -201,6 +201,34 @@ jQuery(async function () {
         } catch (_) { /* noop */ }
         console.log(`${LOG_PREFIX} ${msg}`);
     }
+    // Copy text to clipboard with a legacy fallback for non-secure contexts
+    // (mobile browsers often block navigator.clipboard on http origins).
+    async function copyToClipboard(text) {
+        const str = String(text == null ? '' : text);
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(str);
+                return true;
+            }
+        } catch (_) { /* fall through to legacy */ }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = str;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            ta.setSelectionRange(0, str.length);
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+        } catch (_) {
+            return false;
+        }
+    }
 
     // =====================================================================
     // SELECTION POPUP (the "highlighter" toolbar)
@@ -793,6 +821,12 @@ jQuery(async function () {
         });
 
         // quote actions
+        $modal.on('click', '.stq-q-copy', async function () {
+            const q = findQuote($(this).closest('.stq-quote').data('qid'));
+            if (!q) return;
+            const ok = await copyToClipboard(q.text);
+            toast(ok ? t('toast.copied') : t('toast.copyFailed'), ok ? 'success' : 'warning');
+        });
         $modal.on('click', '.stq-q-goto', function () {
             const q = findQuote($(this).closest('.stq-quote').data('qid'));
             if (q) { closePanel(); setTimeout(() => scrollToQuote(q), 250); }
@@ -1002,6 +1036,7 @@ jQuery(async function () {
                     <div class="stq-quote-actions">
                         <div class="stq-q-color">${swatches}</div>
                         <div class="stq-quote-btns">
+                            <button class="stq-text-btn stq-q-copy"><i class="fa-solid fa-copy"></i> ${t('action.copy')}</button>
                             ${isCurChat ? `<button class="stq-text-btn stq-q-goto"><i class="fa-solid fa-location-crosshairs"></i> ${t('action.goto')}</button>` : ''}
                             <button class="stq-text-btn stq-danger stq-q-del"><i class="fa-solid fa-trash"></i> ${t('action.delete')}</button>
                         </div>

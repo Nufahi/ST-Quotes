@@ -20,6 +20,9 @@
     "action.delete": "Удалить",
     "action.goto": "Перейти",
     "action.save": "Сохранить",
+    "action.copy": "Копировать",
+    "toast.copied": "Цитата скопирована",
+    "toast.copyFailed": "Не удалось скопировать",
 
     "sel.addNote": "Добавить заметку",
 
