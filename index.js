@@ -357,78 +357,102 @@ jQuery(async function () {
         if (text.length < 2) { hideSelPopup(); return; }
 
         const range = sel.getRangeAt(0);
-        // Only react to selections inside a chat message's text body.
-        const anchor = range.startContainer;
-        const inText = (anchor.nodeType === 3 ? anchor.parentElement : anchor)?.closest?.('.mes_text');
-        if (!inText) { hideSelPopup(); return; }
+        // Find the chat message the selection belongs to. Check anchor, focus
+        // and the range's common ancestor, because on mobile the selection
+        // boundary is often an element node, not a text node (this is why the
+        // popup failed to appear on phones).
+        const elFor = (n) => (n && n.nodeType === 3 ? n.parentElement : n) || null;
+        const mesEl =
+            elFor(sel.anchorNode)?.closest?.('#chat .mes[mesid]')
+            || elFor(sel.focusNode)?.closest?.('#chat .mes[mesid]')
+            || elFor(range.commonAncestorContainer)?.closest?.('#chat .mes[mesid]');
+        if (!mesEl) { hideSelPopup(); return; }
 
-        const info = mesInfoFromNode(anchor);
+        const info = mesInfoFromNode(mesEl);
         if (!info) { hideSelPopup(); return; }
 
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
-        lastSelRect = range.getBoundingClientRect();
+        // Use the last visible client rect (end of selection) for a tight anchor.
+        const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+        lastSelRect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
 
         buildSelPopup().removeClass('stq-hidden');
         refreshSelPopupTitles();
         repositionSelPopup();
     }
 
+    const SEL_VIEWPORT_PAD = 8;
+
     function repositionSelPopup() {
         if (!$selPopup) return;
         const $p = $selPopup;
         const el = $p[0];
 
-        // On phones / narrow screens the native text-selection menu (Copy /
-        // Select all) is a system overlay that sits over the page and steals
-        // taps, so floating our popup over the selection is unusable. Instead
-        // pin it to an edge of the screen, clear of the native menu. We set the
-        // position with inline !important styles (not a CSS class) because the
-        // extension's style.css gets cached on mobile and a stale copy would
-        // mis-place it.
-        let narrow = false;
-        try { narrow = window.innerWidth <= 900 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (_) { /* noop */ }
-        if (narrow) {
-            const noteOpen = $p.hasClass('stq-note-open');
-            const set = (k, v) => el.style.setProperty(k, v, 'important');
-            set('position', 'fixed');
-            set('left', '50%');
+        // Force-apply the core layout with inline !important styles so a stale
+        // cached style.css on mobile can never leave the popup mis-placed or
+        // invisible. We position the toolbar to the SIDE of the selection (the
+        // same approach SillyTavern-MemoryBooks uses for its clip button),
+        // because the native selection menu sits ABOVE the selection, so
+        // floating there causes the conflict you saw. The arrow is hidden in
+        // this mode since it isn't pointing straight at the text.
+        const set = (k, v) => el.style.setProperty(k, v, 'important');
+        set('position', 'fixed');
+        set('z-index', '12000');
+        set('opacity', '1');
+        set('animation', 'none');
+        set('transform', 'none');
+        set('max-width', 'calc(100vw - 16px)');
+        const arrow = el.querySelector('.stq-sel-arrow');
+        if (arrow) arrow.style.setProperty('display', 'none', 'important');
+        $p.removeClass('stq-below');
+
+        // When the note editor is open it's tall; dock it near the top center so
+        // the on-screen keyboard doesn't cover it.
+        if ($p.hasClass('stq-note-open')) {
+            const pw0 = el.offsetWidth || 280;
+            const left0 = Math.max(SEL_VIEWPORT_PAD, Math.round((window.innerWidth - pw0) / 2));
+            set('left', left0 + 'px');
             set('right', 'auto');
-            set('transform', 'translateX(-50%)');
-            set('z-index', '12000');
-            set('max-width', 'calc(100vw - 16px)');
-            set('opacity', '1');
-            set('animation', 'none');
-            // note editor open -> dock to top so the keyboard doesn't cover it
-            if (noteOpen) { set('top', '10px'); set('bottom', 'auto'); }
-            else { set('bottom', '14px'); set('top', 'auto'); }
-            $p.removeClass('stq-below');
-            const arrow = el.querySelector('.stq-sel-arrow');
-            if (arrow) arrow.style.setProperty('display', 'none', 'important');
+            set('top', '10px');
+            set('bottom', 'auto');
             return;
         }
 
-        // Desktop: clear any inline docking and float near the selection.
-        ['position', 'left', 'right', 'top', 'bottom', 'transform', 'z-index', 'max-width', 'opacity', 'animation']
-            .forEach(p => el.style.removeProperty(p));
-        const arrow0 = el.querySelector('.stq-sel-arrow');
-        if (arrow0) arrow0.style.removeProperty('display');
+        if (!lastSelRect) {
+            // No geometry yet: park it bottom-center so it's at least visible.
+            set('left', '50%');
+            set('transform', 'translateX(-50%)');
+            set('bottom', '14px');
+            set('top', 'auto');
+            return;
+        }
 
-        if (!lastSelRect) return;
         const rect = lastSelRect;
+        const pw = el.offsetWidth || 220;
+        const ph = el.offsetHeight || 48;
 
-        const pw = $p.outerWidth() || 200;
-        const ph = $p.outerHeight() || 48;
-        let left = rect.left + rect.width / 2 - pw / 2;
-        left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
-        let top = rect.top - ph - 12;
-        let below = false;
-        if (top < 8) { top = rect.bottom + 12; below = true; }
+        // Try to the RIGHT of the selection end, vertically centered.
+        let left = rect.right + 8;
+        let top = rect.top + rect.height / 2 - ph / 2;
 
-        $p.toggleClass('stq-below', below);
-        $p.css({ left: left + 'px', top: top + 'px' });
-        // arrow x position relative to popup
-        const arrowX = Math.max(12, Math.min(rect.left + rect.width / 2 - left, pw - 12));
-        $p.find('.stq-sel-arrow').css('left', arrowX + 'px');
+        // If it would overflow the right edge, put it to the LEFT instead.
+        if (left + pw > window.innerWidth - SEL_VIEWPORT_PAD) {
+            left = rect.left - pw - 8;
+        }
+        // If still off-screen (very wide popup / narrow phone), center it under
+        // the selection where the native menu (which is above) won't overlap.
+        if (left < SEL_VIEWPORT_PAD) {
+            left = rect.left + rect.width / 2 - pw / 2;
+            top = rect.bottom + 10;
+        }
+
+        left = Math.max(SEL_VIEWPORT_PAD, Math.min(left, window.innerWidth - pw - SEL_VIEWPORT_PAD));
+        top = Math.max(SEL_VIEWPORT_PAD, Math.min(top, window.innerHeight - ph - SEL_VIEWPORT_PAD));
+
+        set('left', Math.round(left) + 'px');
+        set('right', 'auto');
+        set('top', Math.round(top) + 'px');
+        set('bottom', 'auto');
     }
 
     function saveSelectionAsQuote(color, comment) {
@@ -1182,22 +1206,23 @@ jQuery(async function () {
         boundHandlers.push([evt, fn]);
     }
 
-    // Selection events (mouse + touch + keyboard)
+    // Selection events. We drive the popup off `selectionchange` (fires on
+    // every device, including while dragging the native selection handles on
+    // mobile) plus mouseup/touchend/keyup as fast paths. This mirrors the
+    // approach used by SillyTavern-MemoryBooks' floating clip button, which is
+    // proven to work on phones. A short debounce lets the selection settle.
     const onSelectionChange = () => {
         if (noteFieldActive()) return; // don't disturb the note being typed
-        // debounce a touch so the popup follows the final selection
         clearTimeout(onSelectionChange._t);
         onSelectionChange._t = setTimeout(showSelPopupForSelection, 120);
     };
     document.addEventListener('mouseup', onSelectionChange);
     document.addEventListener('touchend', onSelectionChange);
-    const onSelectionChangeEvt = () => {
-        if (noteFieldActive()) return; // clicking into the note collapses the
-        // chat selection — that's expected, keep the popup open.
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed) hideSelPopup();
-    };
-    document.addEventListener('selectionchange', onSelectionChangeEvt);
+    document.addEventListener('keyup', onSelectionChange);
+    // `onSelectionChangeEvt` kept as a separate named ref for dispose(); it just
+    // forwards to the same debounced show/hide logic.
+    const onSelectionChangeEvt = onSelectionChange;
+    document.addEventListener('selectionchange', onSelectionChange);
     const onDocPointerDown = (e) => {
         // Close the mark popover when clicking outside it (but not when clicking
         // another mark — onMarkClick handles that).
@@ -1281,7 +1306,8 @@ jQuery(async function () {
             });
             document.removeEventListener('mouseup', onSelectionChange);
             document.removeEventListener('touchend', onSelectionChange);
-            document.removeEventListener('selectionchange', onSelectionChangeEvt);
+            document.removeEventListener('keyup', onSelectionChange);
+            document.removeEventListener('selectionchange', onSelectionChange);
             document.removeEventListener('mousedown', onDocPointerDown);
             document.removeEventListener('click', onMarkClick, true);
             document.removeEventListener('click', onTopBarClick, true);
