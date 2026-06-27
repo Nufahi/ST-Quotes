@@ -37,9 +37,16 @@
     "toast.saved": "Saved to {label}",
     "toast.noChat": "Open a chat first to save quotes.",
     "toast.notInView": "That message isn't loaded in the current view.",
+    "toast.removed": "Quote removed",
 
+    "mark.removeHint": "Click to remove this quote",
+
+    "set.intro": "Highlight any line in your roleplay, color it, and revisit it later — organized per bot and chat, with your own notes.",
     "set.enabled": "Enable Quotes",
+    "set.enabledDesc": "Turn the selection toolbar and saving on or off.",
     "set.highlight": "Highlight quoted text in chat",
-    "set.labels": "Color labels (optional meaning per color)",
+    "set.highlightDesc": "Keep saved quotes marked right in the message, like a book highlighter.",
+    "set.labels": "Color labels",
+    "set.labelsHint": "Give each color a meaning (e.g. yellow = important, pink = cute). Used in filters and tooltips.",
     "set.openPanel": "Open Quotes Panel"
 }

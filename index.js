@@ -441,7 +441,11 @@ jQuery(async function () {
             mark.dataset.qid = quote.id;
             mark.dataset.color = quote.color;
             mark.style.setProperty('--stq-c', colorHex(quote.color));
+            // Native tooltip (desktop hover) shows the comment if present,
+            // otherwise the color's label. Tap/click opens a richer popover.
             mark.title = quote.comment ? quote.comment : colorLabel(quote.color);
+            mark.setAttribute('role', 'button');
+            if (quote.comment) mark.classList.add('stq-has-note');
             try {
                 range.surroundContents(mark);
                 return true;
@@ -507,6 +511,107 @@ jQuery(async function () {
         const target = mark || block;
         target.classList.add('stq-flash');
         setTimeout(() => target.classList.remove('stq-flash'), 1600);
+    }
+
+    // ---------------------------------------------------------------------
+    // Mark popover — tap/click a highlight in chat to read its note (works on
+    // mobile too) and remove the quote if you marked the wrong thing.
+    // ---------------------------------------------------------------------
+    let $markPop = null;
+    function hideMarkPop() { if ($markPop) $markPop.addClass('stq-hidden'); }
+
+    function buildMarkPop() {
+        if ($markPop) return $markPop;
+        $markPop = $(`
+            <div id="stq-mark-pop" class="stq-mark-pop stq-hidden">
+                <div class="stq-mark-arrow"></div>
+                <div class="stq-mark-note"></div>
+                <div class="stq-mark-actions">
+                    <button class="stq-text-btn stq-mark-edit"><i class="fa-solid fa-pen"></i> ${escapeHtml(t('sel.addNote'))}</button>
+                    <button class="stq-text-btn stq-danger stq-mark-remove"><i class="fa-solid fa-trash"></i> ${escapeHtml(t('action.delete'))}</button>
+                </div>
+            </div>`);
+        $('body').append($markPop);
+        $markPop.on('mousedown touchstart', (e) => e.stopPropagation());
+        $markPop.on('click', '.stq-mark-remove', async function (e) {
+            e.preventDefault(); e.stopPropagation();
+            const qid = $markPop.data('qid');
+            hideMarkPop();
+            if (await confirmDialog(t('confirm.delQuote'))) {
+                deleteQuote(qid);
+                toast(t('toast.removed'), 'success');
+                if (drawerOpen) renderPanel();
+            }
+        });
+        $markPop.on('click', '.stq-mark-edit', async function (e) {
+            e.preventDefault(); e.stopPropagation();
+            const qid = $markPop.data('qid');
+            const q = findQuote(qid);
+            hideMarkPop();
+            if (!q) return;
+            const note = await promptDialog(t('placeholder.comment'), q.comment || '');
+            if (note === null) return;
+            q.comment = note.trim();
+            save();
+            refreshHighlight(qid);
+            if (drawerOpen) renderPanel();
+        });
+        return $markPop;
+    }
+
+    function showMarkPop(markEl) {
+        const qid = markEl.dataset.qid;
+        const q = findQuote(qid);
+        if (!q) return;
+        const $p = buildMarkPop();
+        $p.data('qid', qid);
+        const noteText = q.comment && q.comment.trim()
+            ? q.comment
+            : colorLabel(q.color);
+        $p.find('.stq-mark-note')
+            .toggleClass('stq-mark-note-empty', !(q.comment && q.comment.trim()))
+            .text(noteText);
+        $p.css('--stq-c', colorHex(q.color));
+        $p.removeClass('stq-hidden');
+
+        const rect = markEl.getBoundingClientRect();
+        const pw = $p.outerWidth() || 240;
+        const ph = $p.outerHeight() || 80;
+        let left = rect.left + rect.width / 2 - pw / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+        let top = rect.top - ph - 10;
+        let below = false;
+        if (top < 8) { top = rect.bottom + 10; below = true; }
+        $p.toggleClass('stq-below', below);
+        $p.css({ left: left + 'px', top: top + 'px' });
+        const arrowX = Math.max(14, Math.min(rect.left + rect.width / 2 - left, pw - 14));
+        $p.find('.stq-mark-arrow').css('left', arrowX + 'px');
+    }
+
+    // Delegated: tap/click a highlight mark in the chat.
+    function onMarkClick(e) {
+        const mark = e.target instanceof Element ? e.target.closest('.stq-mark') : null;
+        if (!mark || !mark.closest('#chat')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // toggle if same mark
+        if ($markPop && !$markPop.hasClass('stq-hidden') && $markPop.data('qid') === mark.dataset.qid) {
+            hideMarkPop();
+        } else {
+            showMarkPop(mark);
+        }
+    }
+
+    async function promptDialog(title, value) {
+        try {
+            const c = ctx();
+            if (c.Popup?.show?.input) {
+                const r = await c.Popup.show.input(t('app.title'), title, value || '');
+                return (r === null || r === undefined) ? null : String(r);
+            }
+        } catch (_) { /* noop */ }
+        const r = window.prompt(title, value || '');
+        return r;
     }
 
     // =====================================================================
@@ -950,10 +1055,10 @@ jQuery(async function () {
         if (!host || document.getElementById('stq-settings')) return;
         const s = getSettings();
         const labelRows = COLORS.map(c => `
-            <div class="stq-set-row">
-                <span class="stq-dot" style="--stq-c:${c.hex}"></span>
+            <div class="stq_set_label_row" style="--stq-c:${c.hex}">
+                <span class="stq_color_chip"><span class="stq_color_dot"></span></span>
                 <input type="text" class="text_pole stq-label-input" data-color="${c.id}"
-                    placeholder="${t('color.' + c.id)}" value="${escapeHtml(s.colorLabels[c.id] || '')}">
+                    placeholder="${escapeHtml(t('color.' + c.id))}" value="${escapeHtml(s.colorLabels[c.id] || '')}">
             </div>`).join('');
         const html = `
         <div id="stq-settings" class="stq-settings">
@@ -963,19 +1068,34 @@ jQuery(async function () {
                     <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
                 </div>
                 <div class="inline-drawer-content">
-                    <label class="checkbox_label">
-                        <input type="checkbox" id="stq-set-enabled" ${s.enabled ? 'checked' : ''}>
-                        <span>${t('set.enabled')}</span>
-                    </label>
-                    <label class="checkbox_label">
-                        <input type="checkbox" id="stq-set-highlight" ${s.highlightInChat ? 'checked' : ''}>
-                        <span>${t('set.highlight')}</span>
-                    </label>
-                    <hr>
-                    <div class="stq-set-caption">${t('set.labels')}</div>
-                    ${labelRows}
-                    <div class="stq-set-actions">
-                        <div class="menu_button stq-open-panel"><i class="fa-solid fa-bookmark"></i> ${t('set.openPanel')}</div>
+                    <div class="stq_settings_card">
+                        <div class="stq_settings_intro">${escapeHtml(t('set.intro'))}</div>
+
+                        <div class="stq_settings_primary stq-open-panel" role="button" tabindex="0">
+                            <i class="fa-solid fa-bookmark"></i> <span>${escapeHtml(t('set.openPanel'))}</span>
+                        </div>
+
+                        <div class="stq_set_row stq_set_toggle">
+                            <div class="stq_set_text">
+                                <div class="stq_set_label">${escapeHtml(t('set.enabled'))}</div>
+                                <div class="stq_set_desc">${escapeHtml(t('set.enabledDesc'))}</div>
+                            </div>
+                            <input type="checkbox" id="stq-set-enabled" ${s.enabled ? 'checked' : ''}>
+                        </div>
+
+                        <div class="stq_set_row stq_set_toggle">
+                            <div class="stq_set_text">
+                                <div class="stq_set_label">${escapeHtml(t('set.highlight'))}</div>
+                                <div class="stq_set_desc">${escapeHtml(t('set.highlightDesc'))}</div>
+                            </div>
+                            <input type="checkbox" id="stq-set-highlight" ${s.highlightInChat ? 'checked' : ''}>
+                        </div>
+
+                        <div class="stq_settings_section">
+                            <div class="stq_settings_heading">${escapeHtml(t('set.labels'))}</div>
+                            ${labelRows}
+                            <div class="stq_settings_foot">${escapeHtml(t('set.labelsHint'))}</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -991,6 +1111,12 @@ jQuery(async function () {
         $set.on('input', '.stq-label-input', function () {
             getSettings().colorLabels[$(this).data('color')] = this.value; save();
             refreshSelPopupTitles();
+        });
+        // Click anywhere on a toggle row flips its checkbox.
+        $set.on('click', '.stq_set_toggle', function (e) {
+            if (e.target.tagName === 'INPUT') return;
+            const cb = this.querySelector('input[type="checkbox"]');
+            if (cb) { cb.checked = !cb.checked; $(cb).trigger('change'); }
         });
         $set.on('click', '.stq-open-panel', () => openPanel());
     }
@@ -1022,7 +1148,14 @@ jQuery(async function () {
     };
     document.addEventListener('selectionchange', onSelectionChangeEvt);
     const onDocPointerDown = (e) => {
-        // A click outside the popup closes it (incl. while a note is open).
+        // Close the mark popover when clicking outside it (but not when clicking
+        // another mark — onMarkClick handles that).
+        if ($markPop && !$markPop.hasClass('stq-hidden')
+            && !$markPop[0].contains(e.target)
+            && !(e.target instanceof Element && e.target.closest('.stq-mark'))) {
+            hideMarkPop();
+        }
+        // A click outside the selection popup closes it (incl. while a note is open).
         if ($selPopup && !$selPopup.hasClass('stq-hidden') && !$selPopup[0].contains(e.target)) {
             if (noteFieldActive()) { hideSelPopup(); return; }
             // let the selection settle; if collapsed it'll hide via selectionchange
@@ -1033,7 +1166,12 @@ jQuery(async function () {
         }
     };
     document.addEventListener('mousedown', onDocPointerDown);
-    const onScrollHide = () => { if (!noteFieldActive()) hideSelPopup(); };
+    // Tap/click a highlight mark to open its note popover.
+    document.addEventListener('click', onMarkClick, true);
+    const onScrollHide = () => {
+        if (!noteFieldActive()) hideSelPopup();
+        hideMarkPop();
+    };
     window.addEventListener('scroll', onScrollHide, true);
 
     // Re-apply highlights as messages render / chat changes
@@ -1094,11 +1232,13 @@ jQuery(async function () {
             document.removeEventListener('touchend', onSelectionChange);
             document.removeEventListener('selectionchange', onSelectionChangeEvt);
             document.removeEventListener('mousedown', onDocPointerDown);
+            document.removeEventListener('click', onMarkClick, true);
             document.removeEventListener('click', onTopBarClick, true);
             window.removeEventListener('scroll', onScrollHide, true);
             clearInterval(wandTimer);
             clearAllHighlights();
-            $('#stq-modal, #stq-sel-popup, #stq_wand_button, #stq-settings').remove();
+            hideMarkPop();
+            $('#stq-modal, #stq-sel-popup, #stq-mark-pop, #stq_wand_button, #stq-settings').remove();
             document.body.classList.remove('stq-modal-open');
         } catch (e) { console.error(`${LOG_PREFIX} dispose error`, e); }
         window.__stQuotesInitialized = false;

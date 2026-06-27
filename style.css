@@ -24,11 +24,69 @@ body.stq-modal-open { overflow: hidden; }
     box-shadow: inset 0 -0.5em 0 color-mix(in srgb, var(--stq-c) 20%, transparent);
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
-    cursor: help;
+    cursor: pointer;
     transition: background 0.15s ease;
 }
 .stq-mark:hover {
     background: color-mix(in srgb, var(--stq-c) 48%, transparent);
+}
+/* a tiny dot hints a quote has a note attached */
+.stq-mark.stq-has-note::after {
+    content: '';
+    display: inline-block;
+    width: 5px; height: 5px;
+    margin: 0 1px 0 2px;
+    border-radius: 50%;
+    background: var(--stq-c);
+    vertical-align: super;
+    box-shadow: 0 0 4px color-mix(in srgb, var(--stq-c) 70%, transparent);
+}
+
+/* ---- Mark popover (tap a highlight to read its note / remove it) ---- */
+.stq-mark-pop {
+    position: fixed;
+    z-index: 11050;
+    width: min(280px, calc(100vw - 24px));
+    padding: 12px 14px;
+    background: var(--stq-bg);
+    color: var(--stq-fg);
+    border: 1px solid var(--stq-border);
+    border-left: 4px solid var(--stq-c);
+    border-radius: 14px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    animation: stq-pop 0.13s ease;
+}
+.stq-mark-arrow {
+    position: absolute;
+    bottom: -6px;
+    width: 12px; height: 12px;
+    background: var(--stq-bg);
+    border-right: 1px solid var(--stq-border);
+    border-bottom: 1px solid var(--stq-border);
+    transform: translateX(-50%) rotate(45deg);
+}
+.stq-mark-pop.stq-below .stq-mark-arrow {
+    bottom: auto; top: -6px;
+    transform: translateX(-50%) rotate(225deg);
+}
+.stq-mark-note {
+    font-style: italic;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.stq-mark-note.stq-mark-note-empty {
+    font-style: normal;
+    color: var(--stq-muted);
+}
+.stq-mark-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
 }
 .mes.stq-flash,
 .stq-mark.stq-flash {
@@ -436,27 +494,141 @@ body.stq-modal-open { overflow: hidden; }
 .stq-empty-hint { font-size: 0.84rem; margin-top: 6px; max-width: 320px; }
 
 /* ============================================================
- * SETTINGS CARD
+ * SETTINGS CARD (Extensions tab) — rounded, pretty card
  * ============================================================ */
-.stq-settings .stq-set-caption {
-    font-size: 0.82rem;
+:root {
+    --stq-accent: var(--SmartThemeQuoteColor, #5aa9ff);
+    --stq-set-surface: color-mix(in srgb, var(--stq-bg) 88%, rgba(255, 255, 255, 0.03) 12%);
+    --stq-set-surface-strong: color-mix(in srgb, var(--stq-bg) 80%, rgba(255, 255, 255, 0.08) 20%);
+    --stq-accent-soft: color-mix(in srgb, var(--stq-accent) 16%, var(--stq-bg) 84%);
+}
+
+.stq-settings .stq_settings_card {
+    margin-top: 6px;
+    padding: 14px;
+    border: 1px solid var(--stq-border);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--stq-accent) 9%, transparent) 0%, transparent 22%),
+        var(--stq-set-surface);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    color: var(--stq-fg);
+}
+
+.stq-settings .stq_settings_intro {
+    margin: 0 0 12px;
+    font-size: 0.84em;
+    line-height: 1.5;
     color: var(--stq-muted);
-    margin: 8px 0 6px;
 }
-.stq-settings .stq-set-row {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 6px;
-}
-.stq-settings .stq-label-input { flex: 1; }
-.stq-settings .stq-set-actions { margin-top: 12px; }
-.stq-settings .stq-open-panel {
-    display: inline-flex;
+
+.stq-settings .stq_settings_primary {
+    display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    margin: 0 0 14px;
+    cursor: pointer;
+    font-weight: 600;
     white-space: nowrap;
-    width: auto;
+    border-radius: 999px;
+    color: var(--stq-accent);
+    background: var(--stq-accent-soft);
+    border: 1px solid var(--stq-accent);
+    transition: background 0.15s ease, transform 0.08s ease;
 }
-.stq-settings .stq-open-panel i { flex: 0 0 auto; }
+.stq-settings .stq_settings_primary:hover {
+    background: color-mix(in srgb, var(--stq-accent) 26%, var(--stq-set-surface) 74%);
+}
+.stq-settings .stq_settings_primary:active { transform: scale(0.98); }
+.stq-settings .stq_settings_primary i { flex: 0 0 auto; }
+
+.stq-settings .stq_set_row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    margin: 0 0 6px;
+    border: 1px solid var(--stq-border);
+    border-radius: 10px;
+    background: var(--stq-set-surface-strong);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.stq-settings .stq_set_toggle { cursor: pointer; }
+.stq-settings .stq_set_row:hover {
+    border-color: color-mix(in srgb, var(--stq-accent) 40%, var(--stq-border) 60%);
+}
+.stq-settings .stq_set_row:has(input:checked) {
+    border-color: color-mix(in srgb, var(--stq-accent) 55%, var(--stq-border) 45%);
+    background: color-mix(in srgb, var(--stq-accent) 12%, var(--stq-set-surface-strong) 88%);
+}
+.stq-settings .stq_set_text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.stq-settings .stq_set_label { font-size: 0.9em; line-height: 1.35; }
+.stq-settings .stq_set_desc {
+    font-size: 0.76em;
+    line-height: 1.4;
+    color: var(--stq-muted);
+}
+.stq-settings .stq_set_row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--stq-accent);
+}
+
+.stq-settings .stq_settings_section { margin-top: 14px; }
+.stq-settings .stq_settings_heading {
+    margin: 0 0 8px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--stq-muted);
+}
+.stq-settings .stq_settings_foot {
+    margin: 8px 0 0;
+    font-size: 0.76em;
+    line-height: 1.45;
+    color: var(--stq-muted);
+}
+
+/* color-label rows */
+.stq-settings .stq_set_label_row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    margin: 0 0 6px;
+    border: 1px solid var(--stq-border);
+    border-radius: 10px;
+    background: var(--stq-set-surface-strong);
+}
+.stq-settings .stq_color_chip {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--stq-c) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--stq-c) 55%, transparent);
+}
+.stq-settings .stq_color_dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--stq-c);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--stq-c) 70%, transparent);
+}
+.stq-settings .stq-label-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
 
 /* ============================================================
  * MOBILE / TOUCH
