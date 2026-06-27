@@ -74,23 +74,6 @@ jQuery(async function () {
         { id: 'yellow', hex: '#ffd23f' },
     ];
     const COLOR_IDS = COLORS.map(c => c.id);
-
-    // Touch / coarse-pointer devices need a different toolbar placement: the
-    // OS-level text-selection menu (Copy / Select all / …) is an overlay that
-    // always sits above page content and steals taps, so floating our popup
-    // *over* the selection is unusable on phones. On these devices we dock the
-    // toolbar to the bottom of the screen, well clear of the native menu.
-    const IS_TOUCH = (() => {
-        try {
-            const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-            const noHover = window.matchMedia && window.matchMedia('(hover: none)').matches;
-            const touchPoints = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
-            return !!((coarse || noHover) && touchPoints);
-        } catch (_) {
-            return 'ontouchstart' in window;
-        }
-    })();
-
     function colorHex(id) { return (COLORS.find(c => c.id === id) || COLORS[3]).hex; }
     function colorLabel(id) {
         const s = getSettings();
@@ -232,11 +215,9 @@ jQuery(async function () {
         const swatches = COLORS.map(c => `
             <button class="stq-sel-color" data-color="${c.id}" title="${escapeHtml(colorLabel(c.id))}"
                 style="--stq-c:${c.hex}"></button>`).join('');
-        const dockedCls = IS_TOUCH ? ' stq-sel-docked' : '';
         $selPopup = $(`
-            <div id="stq-sel-popup" class="stq-sel-popup stq-hidden${dockedCls}" role="menu">
+            <div id="stq-sel-popup" class="stq-sel-popup stq-hidden" role="menu">
                 <div class="stq-sel-arrow"></div>
-                <button class="stq-sel-close" title="${escapeHtml(t('action.close') || 'Close')}" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                 <div class="stq-sel-row">
                     ${swatches}
                     <span class="stq-sel-sep"></span>
@@ -277,14 +258,6 @@ jQuery(async function () {
             e.preventDefault();
             e.stopPropagation();
             openSelNote();
-        });
-
-        // Explicit close (mainly for the docked mobile bar).
-        $selPopup.on('click', '.stq-sel-close', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            try { window.getSelection()?.removeAllRanges(); } catch (_) { /* noop */ }
-            hideSelPopup();
         });
 
         // Save with the typed note.
@@ -378,13 +351,7 @@ jQuery(async function () {
         // Don't disturb the popup while the user is typing a note.
         if (noteFieldActive()) return;
         const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-            // On touch a collapsed selection often just means the native menu /
-            // a swatch tap cleared it — keep the docked bar if it's already armed.
-            if (IS_TOUCH && pendingSelection) return;
-            hideSelPopup();
-            return;
-        }
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideSelPopup(); return; }
 
         const text = sel.toString().trim();
         if (text.length < 2) { hideSelPopup(); return; }
@@ -407,20 +374,9 @@ jQuery(async function () {
     }
 
     function repositionSelPopup() {
-        if (!$selPopup) return;
-        const $p = $selPopup;
-
-        // Mobile / touch: dock to the bottom of the viewport so we never sit
-        // under (and fight with) the native selection menu. No anchoring math
-        // needed — CSS handles the layout via the .stq-sel-docked class.
-        if (IS_TOUCH) {
-            $p.removeClass('stq-below');
-            $p.css({ left: '', top: '' });
-            return;
-        }
-
-        if (!lastSelRect) return;
+        if (!$selPopup || !lastSelRect) return;
         const rect = lastSelRect;
+        const $p = $selPopup;
 
         const pw = $p.outerWidth() || 200;
         const ph = $p.outerHeight() || 48;
@@ -1200,15 +1156,6 @@ jQuery(async function () {
     const onSelectionChangeEvt = () => {
         if (noteFieldActive()) return; // clicking into the note collapses the
         // chat selection — that's expected, keep the popup open.
-        // On touch, selection is driven by dragging the native handles, which
-        // emits a stream of selectionchange events but no clean touchend on the
-        // text. So we both *show* (debounced, once it settles) and avoid hiding
-        // a bar we've already populated from pendingSelection.
-        if (IS_TOUCH) {
-            clearTimeout(onSelectionChange._t);
-            onSelectionChange._t = setTimeout(showSelPopupForSelection, 180);
-            return;
-        }
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed) hideSelPopup();
     };
@@ -1222,11 +1169,7 @@ jQuery(async function () {
             hideMarkPop();
         }
         // A click outside the selection popup closes it (incl. while a note is open).
-        // On touch the docked bar is dismissed only via its close button, by
-        // picking a color, or when a fresh selection replaces it — a stray tap
-        // while text is selected must not nuke it (the native menu causes those).
         if ($selPopup && !$selPopup.hasClass('stq-hidden') && !$selPopup[0].contains(e.target)) {
-            if (IS_TOUCH) return;
             if (noteFieldActive()) { hideSelPopup(); return; }
             // let the selection settle; if collapsed it'll hide via selectionchange
             setTimeout(() => {
@@ -1239,9 +1182,7 @@ jQuery(async function () {
     // Tap/click a highlight mark to open its note popover.
     document.addEventListener('click', onMarkClick, true);
     const onScrollHide = () => {
-        // The docked mobile bar is pinned to the viewport, so scrolling (which
-        // is constant on touch) must not dismiss it; it stays until the user acts.
-        if (!IS_TOUCH && !noteFieldActive()) hideSelPopup();
+        if (!noteFieldActive()) hideSelPopup();
         hideMarkPop();
     };
     window.addEventListener('scroll', onScrollHide, true);
