@@ -380,19 +380,13 @@ jQuery(async function () {
     // TEMP DEBUG: shows on-screen toasts so we can diagnose the mobile popup
     // without a desktop devtools connection. Set back to false once fixed.
     const SEL_DEBUG = true;
-    let _lastSelLog = '';
-    let _lastSelLogAt = 0;
     function selLog() {
         if (!SEL_DEBUG) return;
         const msg = Array.prototype.join.call(arguments, ' ');
-        const now = Date.now();
-        // de-spam: skip identical messages fired within 1.2s of each other
-        if (msg === _lastSelLog && (now - _lastSelLogAt) < 1200) return;
-        _lastSelLog = msg; _lastSelLogAt = now;
         try { console.log(LOG_PREFIX, '[sel]', msg); } catch (_) { /* noop */ }
         try {
             const toastr = ctx().toastr || window.toastr;
-            if (toastr && toastr.info) toastr.info(msg, 'Quotes/sel', { timeOut: 2500, preventDuplicates: true });
+            if (toastr && toastr.info) toastr.info(msg, 'Quotes/sel', { timeOut: 1500, preventDuplicates: false });
         } catch (_) { /* noop */ }
     }
 
@@ -447,23 +441,6 @@ jQuery(async function () {
         buildSelPopup().removeClass('stq-hidden');
         refreshSelPopupTitles();
         repositionSelPopup();
-
-        if (SEL_DEBUG) {
-            setTimeout(() => {
-                try {
-                    const el = $selPopup && $selPopup[0];
-                    if (!el) { selLog('popup el missing'); return; }
-                    const r = el.getBoundingClientRect();
-                    const cs = getComputedStyle(el);
-                    selLog('rect ' + Math.round(r.left) + ',' + Math.round(r.top)
-                        + ' ' + Math.round(r.width) + 'x' + Math.round(r.height)
-                        + ' disp=' + cs.display + ' vis=' + cs.visibility
-                        + ' op=' + cs.opacity + ' z=' + cs.zIndex
-                        + ' pos=' + cs.position
-                        + ' vw=' + window.innerWidth + 'x' + window.innerHeight);
-                } catch (e) { selLog('rect err ' + e.message); }
-            }, 60);
-        }
     }
 
     function repositionSelPopup() {
