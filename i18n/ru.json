@@ -19,6 +19,9 @@
 
     "action.delete": "Удалить",
     "action.goto": "Перейти",
+    "action.save": "Сохранить",
+
+    "sel.addNote": "Добавить заметку",
 
     "placeholder.comment": "Добавить заметку...",
 

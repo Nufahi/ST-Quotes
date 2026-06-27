@@ -195,6 +195,8 @@ jQuery(async function () {
     let $selPopup = null;
     let pendingSelection = null; // { text, mesId, msgName, isUser }
 
+    let selPopupChosenColor = null; // color picked while the note field is open
+
     function buildSelPopup() {
         if ($selPopup) return $selPopup;
         const swatches = COLORS.map(c => `
@@ -203,18 +205,86 @@ jQuery(async function () {
         $selPopup = $(`
             <div id="stq-sel-popup" class="stq-sel-popup stq-hidden" role="menu">
                 <div class="stq-sel-arrow"></div>
-                <div class="stq-sel-row">${swatches}</div>
+                <div class="stq-sel-row">
+                    ${swatches}
+                    <span class="stq-sel-sep"></span>
+                    <button class="stq-sel-note-btn" title="${escapeHtml(t('sel.addNote'))}"><i class="fa-solid fa-pen"></i></button>
+                </div>
+                <div class="stq-sel-note stq-hidden">
+                    <textarea class="stq-sel-note-input text_pole" rows="2" placeholder="${escapeHtml(t('placeholder.comment'))}"></textarea>
+                    <button class="stq-sel-save menu_button"><i class="fa-solid fa-check"></i> ${escapeHtml(t('action.save'))}</button>
+                </div>
             </div>`);
         $('body').append($selPopup);
 
-        $selPopup.on('mousedown touchstart', (e) => { e.preventDefault(); e.stopPropagation(); });
+        // Keep the text selection alive while interacting with the popup.
+        // Only block default (which would clear the selection) for non-text
+        // controls; the textarea must still receive focus & caret.
+        $selPopup.on('mousedown touchstart', (e) => {
+            e.stopPropagation();
+            if (!$(e.target).closest('.stq-sel-note-input').length) e.preventDefault();
+        });
+
+        // Color swatch: if note field is open, just pick the color; otherwise
+        // save instantly (the fast, Yandex.Books-style path).
         $selPopup.on('click', '.stq-sel-color', function (e) {
             e.preventDefault();
             e.stopPropagation();
             const color = $(this).data('color');
-            saveSelectionAsQuote(color);
+            if ($selPopup.hasClass('stq-note-open')) {
+                selPopupChosenColor = color;
+                $selPopup.find('.stq-sel-color').removeClass('active');
+                $(this).addClass('active');
+            } else {
+                saveSelectionAsQuote(color, '');
+            }
         });
+
+        // Toggle the note field.
+        $selPopup.on('click', '.stq-sel-note-btn', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openSelNote();
+        });
+
+        // Save with the typed note.
+        $selPopup.on('click', '.stq-sel-save', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const note = $selPopup.find('.stq-sel-note-input').val() || '';
+            const color = selPopupChosenColor || getSettings().defaultColor;
+            saveSelectionAsQuote(color, note);
+        });
+
+        // Ctrl/Cmd+Enter saves; Escape closes.
+        $selPopup.on('keydown', '.stq-sel-note-input', function (e) {
+            e.stopPropagation();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                const note = this.value || '';
+                const color = selPopupChosenColor || getSettings().defaultColor;
+                saveSelectionAsQuote(color, note);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                hideSelPopup();
+            }
+        });
+
         return $selPopup;
+    }
+
+    function openSelNote() {
+        if (!$selPopup) return;
+        selPopupChosenColor = getSettings().defaultColor;
+        $selPopup.addClass('stq-note-open');
+        $selPopup.find('.stq-sel-note').removeClass('stq-hidden');
+        $selPopup.find('.stq-sel-color').removeClass('active')
+            .filter(`[data-color="${selPopupChosenColor}"]`).addClass('active');
+        const $ta = $selPopup.find('.stq-sel-note-input');
+        $ta.val('');
+        // focus without losing the saved selection range
+        setTimeout(() => { try { $ta[0].focus({ preventScroll: true }); } catch (_) { $ta.trigger('focus'); } }, 0);
+        repositionSelPopup();
     }
 
     function refreshSelPopupTitles() {
@@ -225,8 +295,20 @@ jQuery(async function () {
     }
 
     function hideSelPopup() {
-        if ($selPopup) $selPopup.addClass('stq-hidden');
+        if ($selPopup) {
+            $selPopup.addClass('stq-hidden').removeClass('stq-note-open');
+            $selPopup.find('.stq-sel-note').addClass('stq-hidden');
+            $selPopup.find('.stq-sel-note-input').val('');
+            $selPopup.find('.stq-sel-color').removeClass('active');
+        }
+        selPopupChosenColor = null;
         pendingSelection = null;
+    }
+
+    // True while the user is typing a note in the selection popup — used to
+    // stop selectionchange/pointer handlers from hiding the popup.
+    function noteFieldActive() {
+        return !!($selPopup && $selPopup.hasClass('stq-note-open'));
     }
 
     // Find the .mes element (and its mesid) that contains a node.
@@ -248,9 +330,13 @@ jQuery(async function () {
         return null;
     }
 
+    let lastSelRect = null; // remembered selection rect for repositioning
+
     function showSelPopupForSelection() {
         const s = getSettings();
         if (!s.enabled) return;
+        // Don't disturb the popup while the user is typing a note.
+        if (noteFieldActive()) return;
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideSelPopup(); return; }
 
@@ -267,10 +353,17 @@ jQuery(async function () {
         if (!info) { hideSelPopup(); return; }
 
         pendingSelection = { text, mesId: info.mesId, msgName: info.msgName, isUser: info.isUser };
+        lastSelRect = range.getBoundingClientRect();
 
-        const rect = range.getBoundingClientRect();
-        const $p = buildSelPopup().removeClass('stq-hidden');
+        buildSelPopup().removeClass('stq-hidden');
         refreshSelPopupTitles();
+        repositionSelPopup();
+    }
+
+    function repositionSelPopup() {
+        if (!$selPopup || !lastSelRect) return;
+        const rect = lastSelRect;
+        const $p = $selPopup;
 
         const pw = $p.outerWidth() || 200;
         const ph = $p.outerHeight() || 48;
@@ -287,7 +380,7 @@ jQuery(async function () {
         $p.find('.stq-sel-arrow').css('left', arrowX + 'px');
     }
 
-    function saveSelectionAsQuote(color) {
+    function saveSelectionAsQuote(color, comment) {
         if (!pendingSelection) { hideSelPopup(); return; }
         if (!hasOpenChat() || !getBotKey()) {
             toast(t('toast.noChat'), 'warning');
@@ -301,7 +394,7 @@ jQuery(async function () {
             id: uid(),
             text: pendingSelection.text,
             color: COLOR_IDS.includes(color) ? color : getSettings().defaultColor,
-            comment: '',
+            comment: (comment || '').trim(),
             mesId: pendingSelection.mesId,
             msgName: pendingSelection.msgName,
             isUser: pendingSelection.isUser,
@@ -914,18 +1007,24 @@ jQuery(async function () {
 
     // Selection events (mouse + touch + keyboard)
     const onSelectionChange = () => {
+        if (noteFieldActive()) return; // don't disturb the note being typed
         // debounce a touch so the popup follows the final selection
         clearTimeout(onSelectionChange._t);
         onSelectionChange._t = setTimeout(showSelPopupForSelection, 120);
     };
     document.addEventListener('mouseup', onSelectionChange);
     document.addEventListener('touchend', onSelectionChange);
-    document.addEventListener('selectionchange', () => {
+    const onSelectionChangeEvt = () => {
+        if (noteFieldActive()) return; // clicking into the note collapses the
+        // chat selection — that's expected, keep the popup open.
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed) hideSelPopup();
-    });
+    };
+    document.addEventListener('selectionchange', onSelectionChangeEvt);
     const onDocPointerDown = (e) => {
-        if ($selPopup && !$selPopup[0].contains(e.target)) {
+        // A click outside the popup closes it (incl. while a note is open).
+        if ($selPopup && !$selPopup.hasClass('stq-hidden') && !$selPopup[0].contains(e.target)) {
+            if (noteFieldActive()) { hideSelPopup(); return; }
             // let the selection settle; if collapsed it'll hide via selectionchange
             setTimeout(() => {
                 const sel = window.getSelection();
@@ -934,7 +1033,8 @@ jQuery(async function () {
         }
     };
     document.addEventListener('mousedown', onDocPointerDown);
-    window.addEventListener('scroll', hideSelPopup, true);
+    const onScrollHide = () => { if (!noteFieldActive()) hideSelPopup(); };
+    window.addEventListener('scroll', onScrollHide, true);
 
     // Re-apply highlights as messages render / chat changes
     const reHighlightDebounced = (() => {
@@ -992,9 +1092,10 @@ jQuery(async function () {
             });
             document.removeEventListener('mouseup', onSelectionChange);
             document.removeEventListener('touchend', onSelectionChange);
+            document.removeEventListener('selectionchange', onSelectionChangeEvt);
             document.removeEventListener('mousedown', onDocPointerDown);
             document.removeEventListener('click', onTopBarClick, true);
-            window.removeEventListener('scroll', hideSelPopup, true);
+            window.removeEventListener('scroll', onScrollHide, true);
             clearInterval(wandTimer);
             clearAllHighlights();
             $('#stq-modal, #stq-sel-popup, #stq_wand_button, #stq-settings').remove();

@@ -46,7 +46,9 @@ body.stq-modal-open { overflow: hidden; }
     position: fixed;
     z-index: 11000;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     padding: 7px 9px;
     background: var(--stq-bg);
     border: 1px solid var(--stq-border);
@@ -54,6 +56,11 @@ body.stq-modal-open { overflow: hidden; }
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(6px);
     animation: stq-pop 0.13s ease;
+}
+/* When the note field is open, become a rounded card instead of a pill. */
+.stq-sel-popup.stq-note-open {
+    border-radius: 16px;
+    width: min(320px, calc(100vw - 24px));
 }
 @keyframes stq-pop {
     from { opacity: 0; transform: translateY(4px) scale(0.96); }
@@ -90,6 +97,54 @@ body.stq-modal-open { overflow: hidden; }
 .stq-sel-color:hover { transform: scale(1.18); }
 .stq-sel-color.active {
     box-shadow: 0 0 0 2px var(--stq-bg), 0 0 0 4px var(--stq-c);
+}
+
+/* separator + note button in the swatch row */
+.stq-sel-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 2px;
+    background: var(--stq-border);
+}
+.stq-sel-note-btn {
+    width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--stq-border);
+    background: var(--stq-surface);
+    color: var(--stq-fg);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.8rem;
+    transition: background 0.12s ease, transform 0.12s ease;
+}
+.stq-sel-note-btn:hover { background: var(--stq-surface-hi); transform: scale(1.1); }
+.stq-sel-popup.stq-note-open .stq-sel-note-btn {
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #5aa9ff) 22%, transparent);
+    border-color: var(--SmartThemeQuoteColor, #5aa9ff);
+}
+
+/* the note editor (revealed) */
+.stq-sel-note {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.stq-sel-note-input {
+    width: 100%;
+    resize: vertical;
+    min-height: 46px;
+    max-height: 160px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+.stq-sel-save {
+    align-self: flex-end;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    width: auto;
 }
 
 /* ============================================================

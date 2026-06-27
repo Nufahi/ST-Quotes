@@ -19,6 +19,9 @@
 
     "action.delete": "Delete",
     "action.goto": "Go to",
+    "action.save": "Save",
+
+    "sel.addNote": "Add a note",
 
     "placeholder.comment": "Add your note...",
 
