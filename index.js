@@ -84,13 +84,8 @@ jQuery(async function () {
         try {
             const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
             const noHover = window.matchMedia && window.matchMedia('(hover: none)').matches;
-            const touchPoints = (navigator.maxTouchPoints || navigator.msMaxTouchPoints || 0) > 0;
-            const hasTouchEvt = 'ontouchstart' in window || 'ontouchstart' in document.documentElement;
-            const narrow = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
-            // Any single touch signal is enough; we'd rather dock the toolbar
-            // unnecessarily on a small desktop window than leave it broken on a
-            // phone where one of these checks happens to fail.
-            return !!(coarse || noHover || touchPoints || hasTouchEvt || narrow);
+            const touchPoints = (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window;
+            return !!((coarse || noHover) && touchPoints);
         } catch (_) {
             return 'ontouchstart' in window;
         }
