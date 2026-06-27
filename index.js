@@ -230,19 +230,45 @@ jQuery(async function () {
             </div>`);
         $('body').append($selPopup);
 
-        // Keep the text selection alive while interacting with the popup.
-        // Only block default (which would clear the selection) for non-text
-        // controls; the textarea must still receive focus & caret.
-        $selPopup.on('mousedown touchstart', (e) => {
+        // Keep the text selection alive while interacting with the popup, but
+        // ONLY for the non-button background. Calling preventDefault on
+        // touchstart over a button suppresses the synthetic click on Android,
+        // which is exactly why the swatches were untappable. So we don't block
+        // touch on the controls; each control gets its own touchend handler.
+        $selPopup.on('mousedown', (e) => {
             e.stopPropagation();
             if (!$(e.target).closest('.stq-sel-note-input').length) e.preventDefault();
         });
+        $selPopup.on('touchstart', (e) => {
+            e.stopPropagation();
+            const onControl = $(e.target).closest('.stq-sel-color, .stq-sel-note-btn, .stq-sel-save, .stq-sel-note-input').length;
+            // Only block default on the empty background (to preserve selection).
+            if (!onControl) e.preventDefault();
+        });
+
+        // Helper: bind an action to BOTH click (desktop) and touchend (mobile).
+        // On mobile, Android's native selection layer often swallows the
+        // synthetic click, so we act on touchend directly and then suppress the
+        // click that may follow to avoid double-firing.
+        const bindTap = (selector, handler) => {
+            let lastTouch = 0;
+            $selPopup.on('touchend', selector, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                lastTouch = Date.now();
+                handler.call(this, e);
+            });
+            $selPopup.on('click', selector, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (Date.now() - lastTouch < 700) return; // already handled by touchend
+                handler.call(this, e);
+            });
+        };
 
         // Color swatch: if note field is open, just pick the color; otherwise
         // save instantly (the fast, Yandex.Books-style path).
-        $selPopup.on('click', '.stq-sel-color', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        bindTap('.stq-sel-color', function () {
             const color = $(this).data('color');
             if ($selPopup.hasClass('stq-note-open')) {
                 selPopupChosenColor = color;
@@ -254,16 +280,12 @@ jQuery(async function () {
         });
 
         // Toggle the note field.
-        $selPopup.on('click', '.stq-sel-note-btn', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        bindTap('.stq-sel-note-btn', function () {
             openSelNote();
         });
 
         // Save with the typed note.
-        $selPopup.on('click', '.stq-sel-save', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        bindTap('.stq-sel-save', function () {
             const note = $selPopup.find('.stq-sel-note-input').val() || '';
             const color = selPopupChosenColor || getSettings().defaultColor;
             saveSelectionAsQuote(color, note);
