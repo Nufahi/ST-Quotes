@@ -93,27 +93,36 @@ body.stq-modal-open { overflow: hidden; }
 }
 
 /* ============================================================
- * MODAL SHELL
+ * MODAL SHELL — right-side floating drawer (Smart Notify style)
  * ============================================================ */
 .stq-modal { position: fixed; inset: 0; z-index: 10050; }
 .stq-backdrop {
     position: absolute; inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
 }
 .stq-panel {
-    position: relative;
+    position: absolute;
+    top: calc(var(--topBarBlockSize, 0px) + 12px);
+    right: 12px;
+    bottom: 12px;
+    width: 400px;
+    max-width: calc(100vw - 24px);
     display: flex;
     flex-direction: column;
-    width: min(820px, calc(100vw - 24px));
-    height: min(900px, calc(100vh - var(--topBarBlockSize, 0px) - 24px));
-    margin: calc(var(--topBarBlockSize, 0px) + 8px) auto 16px;
     background: var(--stq-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     color: var(--stq-fg);
     border: 1px solid var(--stq-border);
-    border-radius: 14px;
-    box-shadow: 0 16px 56px rgba(0, 0, 0, 0.55);
+    border-radius: 18px;
+    box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
     overflow: hidden;
+    animation: stq-slide-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes stq-slide-in {
+    from { transform: translateX(20px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
 }
 
 /* ---- header ---- */
@@ -385,18 +394,40 @@ body.stq-modal-open { overflow: hidden; }
 }
 .stq-settings .stq-label-input { flex: 1; }
 .stq-settings .stq-set-actions { margin-top: 12px; }
+.stq-settings .stq-open-panel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    width: auto;
+}
+.stq-settings .stq-open-panel i { flex: 0 0 auto; }
 
 /* ============================================================
- * MOBILE
+ * MOBILE / TOUCH
+ * Full-screen panel anchored below ST's top bar. No transforms — visibility
+ * is a plain display toggle on .stq-modal, so it always opens & closes
+ * reliably even on flaky mobile browsers (same model as Smart Notify).
  * ============================================================ */
-@media (max-width: 600px) {
+@media (max-width: 768px), (pointer: coarse) {
     .stq-panel {
-        width: 100vw;
+        position: relative;
+        top: auto; right: auto; bottom: auto; left: auto;
+        width: 100%;
+        max-width: 100%;
         height: calc(100vh - var(--topBarBlockSize, 0px));
-        margin: var(--topBarBlockSize, 0px) auto 0;
+        height: calc(100dvh - var(--topBarBlockSize, 0px));
+        margin: var(--topBarBlockSize, 0px) 0 0;
         border-radius: 0;
         border-left: none; border-right: none; border-bottom: none;
+        box-shadow: none;
+        animation: none;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        box-sizing: border-box;
     }
+    /* bigger touch targets */
+    .stq-icon-btn { width: 38px; height: 38px; }
     .stq-quote-actions { align-items: stretch; }
     .stq-sel-color { width: 30px; height: 30px; }
+    .stq-q-color .stq-sel-color { width: 24px; height: 24px; }
 }

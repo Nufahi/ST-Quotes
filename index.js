@@ -767,6 +767,24 @@ jQuery(async function () {
     let wandTimer = null;
     let wandTries = 0;
     let lastFire = 0;
+
+    // Close the wand / extensions dropdown the same way SillyTavern does.
+    // ST toggles these menus with jQuery (display:none / fadeOut), not a CSS
+    // class, so we mirror that. Important on mobile, where the menu otherwise
+    // stays open on top of the panel.
+    function closeExtensionsMenu() {
+        try {
+            if (window.jQuery) {
+                const $j = window.jQuery;
+                $j('#extensionsMenu').fadeOut?.(150);
+                $j('#extensionsMenu').hide?.();
+                $j('.options-content, #extensionsMenuButton').trigger?.('mouseleave');
+            }
+        } catch (_) { /* noop */ }
+        const menu = document.getElementById('extensionsMenu');
+        if (menu) menu.style.display = 'none';
+    }
+
     function addWandButton() {
         const container = document.getElementById('extensionsMenu')
             || document.getElementById('gallery_wand_container');
@@ -777,6 +795,10 @@ jQuery(async function () {
         btn.id = 'stq_wand_button';
         btn.classList.add('list-group-item', 'flex-container', 'flexGap5', 'interactable');
         btn.tabIndex = 0;
+        btn.setAttribute('role', 'button');
+        btn.style.cursor = 'pointer';
+        btn.title = t('app.title');
+
         const icon = document.createElement('div');
         icon.classList.add('fa-solid', 'fa-bookmark', 'extensionsMenuExtensionButton');
         const label = document.createElement('span');
@@ -784,18 +806,48 @@ jQuery(async function () {
         btn.append(icon, label);
 
         const fire = (e) => {
+            // IMPORTANT: only preventDefault — do NOT stopPropagation here.
+            // SillyTavern closes the wand/extensions dropdown via a delegated
+            // click handler on `document`; if we stop the event from bubbling,
+            // that handler never runs and the menu stays open. Letting the
+            // click bubble lets ST auto-close it.
             e.preventDefault();
-            e.stopPropagation();
             const now = Date.now();
             if (now - lastFire < 400) return;
             lastFire = now;
             openPanel();
+            // Belt-and-suspenders for builds/webviews where ST's handler
+            // doesn't fire: explicitly hide the menu too.
+            closeExtensionsMenu();
         };
         btn.addEventListener('click', fire);
-        btn.addEventListener('touchend', fire);
+        btn.addEventListener('touchend', fire, { passive: false });
         container.appendChild(btn);
         return true;
     }
+
+    // Top-bar buttons that should auto-close the panel when tapped — mirrors
+    // SillyTavern's top navigation in #top-settings-holder. Capture phase so we
+    // react before ST opens its own drawer.
+    function onTopBarClick(e) {
+        if (!drawerOpen) return;
+        const target = e.target;
+        if (!(target instanceof Element)) return;
+        // Ignore clicks inside our own panel / selection popup / wand button.
+        if (target.closest('#stq-modal') || target.closest('#stq-sel-popup') || target.closest('#stq_wand_button')) return;
+
+        const hit = target.closest(
+            '#top-settings-holder .drawer-toggle, '
+            + '#top-settings-holder .drawer-icon, '
+            + '#extensionsMenuButton, '
+            + '.fillLeft .drawer-toggle, '
+            + '#sys-settings-button, #user-settings-button, #persona-management-button, '
+            + '#advanced-formatting-button, #WIDrawerIcon, #rightNavDrawerIcon, '
+            + '#leftNavDrawerIcon, #extensions-settings-button, #logo_block'
+        );
+        if (hit) closePanel();
+    }
+    document.addEventListener('click', onTopBarClick, true);
 
     // =====================================================================
     // SETTINGS CARD (Extensions tab) — color labels + toggles
@@ -941,6 +993,7 @@ jQuery(async function () {
             document.removeEventListener('mouseup', onSelectionChange);
             document.removeEventListener('touchend', onSelectionChange);
             document.removeEventListener('mousedown', onDocPointerDown);
+            document.removeEventListener('click', onTopBarClick, true);
             window.removeEventListener('scroll', hideSelPopup, true);
             clearInterval(wandTimer);
             clearAllHighlights();
