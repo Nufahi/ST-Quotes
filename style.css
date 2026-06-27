@@ -276,6 +276,37 @@ body.stq-modal-open { overflow: hidden; }
     to { opacity: 1; transform: translate(-50%, 0); }
 }
 
+/* Safety net: on any narrow / coarse-pointer screen, force the docked layout
+ * even if the JS feature-detection didn't add the .stq-sel-docked class. This
+ * guarantees the toolbar is visible at the bottom on phones. */
+@media (max-width: 900px), (pointer: coarse), (hover: none) {
+    .stq-sel-popup {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: max(12px, env(safe-area-inset-bottom)) !important;
+        transform: translateX(-50%) !important;
+        z-index: 12000 !important;
+        flex-direction: column;
+        align-items: stretch;
+        width: min(440px, calc(100vw - 20px));
+        border-radius: 18px;
+        padding: 14px 14px 12px;
+        animation: none !important;
+        opacity: 1 !important;
+    }
+    .stq-sel-popup .stq-sel-arrow { display: none !important; }
+    .stq-sel-popup .stq-sel-close { display: inline-flex !important; }
+    .stq-sel-popup .stq-sel-row { justify-content: center; gap: 14px; padding: 4px 0 2px; }
+    .stq-sel-popup .stq-sel-color { width: 38px; height: 38px; }
+    .stq-sel-popup .stq-sel-note-btn { width: 38px; height: 38px; font-size: 0.95rem; }
+    .stq-sel-popup.stq-note-open {
+        bottom: auto !important;
+        top: max(12px, env(safe-area-inset-top)) !important;
+    }
+}
+
 /* ============================================================
  * MODAL SHELL — right-side floating drawer (Smart Notify style)
  * ============================================================ */
