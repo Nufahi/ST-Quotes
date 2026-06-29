@@ -544,20 +544,6 @@ jQuery(async function () {
         return bucket ? bucket.items : [];
     }
 
-    // Cache of quotes we already failed to locate in the rendered DOM (text
-    // split across formatting nodes, etc.). Without this, every re-highlight
-    // pass walks the whole .mes_text via TreeWalker for these quotes forever.
-    // Keyed by `${mesId}|${qid}`; invalidated when a message re-renders or the
-    // chat changes (see clearHighlightMissCache).
-    const highlightMiss = new Set();
-    function clearHighlightMissCache(mesId) {
-        if (mesId == null) { highlightMiss.clear(); return; }
-        const prefix = mesId + '|';
-        for (const key of highlightMiss) {
-            if (key.startsWith(prefix)) highlightMiss.delete(key);
-        }
-    }
-
     // Wrap the first occurrence of `text` within a container in a highlight span.
     function wrapTextInElement(container, text, quote) {
         const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
@@ -603,10 +589,8 @@ jQuery(async function () {
         if (!items.length) return;
         // longest first so nested/overlapping shorter strings don't break wrapping
         items.slice().sort((a, b) => b.text.length - a.text.length).forEach((q) => {
-            const missKey = mesId + '|' + q.id;
-            if (highlightMiss.has(missKey)) return; // known un-locatable, skip the DOM walk
             if (block.querySelector(`.stq-mark[data-qid="${q.id}"]`)) return;
-            if (!wrapTextInElement(block, q.text, q)) highlightMiss.add(missKey);
+            wrapTextInElement(block, q.text, q);
         });
     }
 
@@ -1254,8 +1238,7 @@ jQuery(async function () {
         $set.on('change', '#stq-set-enabled', function () { getSettings().enabled = this.checked; save(); });
         $set.on('change', '#stq-set-highlight', function () {
             getSettings().highlightInChat = this.checked; save();
-            if (this.checked) { clearHighlightMissCache(); highlightAllVisible(); }
-            else clearAllHighlights();
+            if (this.checked) highlightAllVisible(); else clearAllHighlights();
         });
         $set.on('input', '.stq-label-input', function () {
             getSettings().colorLabels[$(this).data('color')] = this.value; save();
@@ -1318,65 +1301,26 @@ jQuery(async function () {
     document.addEventListener('mousedown', onDocPointerDown);
     // Tap/click a highlight mark to open its note popover.
     document.addEventListener('click', onMarkClick, true);
-    // Throttle with rAF: `scroll` (capture) fires on every frame of inertial
-    // scrolling on mobile; doing DOM work synchronously per event janks the
-    // chat. Coalesce to at most one run per animation frame.
-    let scrollRaf = 0;
     const onScrollHide = () => {
-        if (scrollRaf) return;
-        scrollRaf = requestAnimationFrame(() => {
-            scrollRaf = 0;
-            if (!noteFieldActive()) hideSelPopup();
-            hideMarkPop();
-        });
+        if (!noteFieldActive()) hideSelPopup();
+        hideMarkPop();
     };
     window.addEventListener('scroll', onScrollHide, true);
 
-    // Re-apply highlights for the WHOLE chat. Only used for events without a
-    // specific message index (chat switch, lazy-loaded older messages, app
-    // ready). Debounced so a burst collapses into a single pass.
+    // Re-apply highlights as messages render / chat changes
     const reHighlightDebounced = (() => {
         let tmr = null;
-        return () => { clearTimeout(tmr); tmr = setTimeout(highlightAllVisible, 120); };
-    })();
-
-    // Re-apply highlights for a SINGLE message, coalescing rapid updates per
-    // message id. Streaming fires MESSAGE_UPDATED in tight bursts; rebuilding
-    // the entire chat's highlights each time is what janks/slows the UI. By
-    // scoping to the touched message and debouncing per id, the cost stays flat
-    // regardless of how many quotes exist across the chat.
-    const reHighlightOne = (() => {
-        const timers = new Map();
-        return (idx) => {
-            if (typeof idx !== 'number') return;
-            clearTimeout(timers.get(idx));
-            timers.set(idx, setTimeout(() => {
-                timers.delete(idx);
-                if (!getSettings().highlightInChat) return;
-                // Message text may have changed (swipe/edit): drop stale marks
-                // for this message and its miss-cache, then re-apply.
-                clearHighlightMissCache(idx);
-                document.querySelectorAll(`#chat .mes[mesid="${idx}"] .stq-mark`).forEach((el) => {
-                    const parent = el.parentNode;
-                    if (!parent) return;
-                    while (el.firstChild) parent.insertBefore(el.firstChild, el);
-                    parent.removeChild(el);
-                    parent.normalize();
-                });
-                highlightMessage(idx);
-            }, 90));
-        };
+        return () => { clearTimeout(tmr); tmr = setTimeout(highlightAllVisible, 80); };
     })();
 
     on(event_types.CHARACTER_MESSAGE_RENDERED, (idx) => { if (typeof idx === 'number') highlightMessage(idx); });
     on(event_types.USER_MESSAGE_RENDERED, (idx) => { if (typeof idx === 'number') highlightMessage(idx); });
-    on(event_types.MESSAGE_SWIPED, reHighlightOne);
-    on(event_types.MESSAGE_EDITED, reHighlightOne);
-    on(event_types.MESSAGE_UPDATED, reHighlightOne);
+    on(event_types.MESSAGE_SWIPED, reHighlightDebounced);
+    on(event_types.MESSAGE_EDITED, reHighlightDebounced);
+    on(event_types.MESSAGE_UPDATED, reHighlightDebounced);
     on(event_types.MORE_MESSAGES_LOADED, reHighlightDebounced);
     on(event_types.CHAT_CHANGED, () => {
         hideSelPopup();
-        clearHighlightMissCache(); // different chat = different DOM/quotes
         if (drawerOpen) { closePanel(); }
         reHighlightDebounced();
     });
@@ -1425,7 +1369,6 @@ jQuery(async function () {
             document.removeEventListener('click', onMarkClick, true);
             document.removeEventListener('click', onTopBarClick, true);
             window.removeEventListener('scroll', onScrollHide, true);
-            if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = 0; }
             clearInterval(wandTimer);
             clearAllHighlights();
             hideMarkPop();
